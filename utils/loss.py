@@ -1,20 +1,32 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
-def generator_loss(fake_output:torch.Tensor, real_output:torch.Tensor, lambda_l: float = 100):
-    gan_loss = F.binary_cross_entropy_with_logits(torch.ones_like(fake_output), fake_output)
+class GeneratorLoss(nn.Module):
+    def __init__(self, alpha=100):
+        super().__init__()
+        self.alpha=alpha
+        self.bce=nn.BCEWithLogitsLoss()
+        self.l1=nn.L1Loss()
+        
+    def forward(self, fake, real, fake_pred):
+        fake_target = torch.ones_like(fake_pred)
+        gan_loss = self.bce(fake_pred, fake_target)
+        l1_loss =  self.l1(fake, real)
+        
+        loss = gan_loss + (self.alpha * l1_loss)
 
-    l1_loss = F.l1_loss(real_output, fake_output)
+        return loss
+    
+class DiscriminatorLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.loss_fn=nn.BCEWithLogitsLoss()
 
-    total_generator_loss = gan_loss + (lambda_l * l1_loss)
+    def forward(self, fake_pred, real_pred):
+        fake_target = self.loss_fn(fake_pred, torch.zeros_like(fake_pred))
+        real_target = self.loss_fn(real_pred, torch.ones_like(real_pred))
 
-    return total_generator_loss, gan_loss, l1_loss
+        loss = fake_target + real_target
 
-def discriminator_loss(fake_output:torch.Tensor, real_output:torch.Tensor):
-    real_loss = F.binary_cross_entropy_with_logits(torch.ones_like(real_output), real_output)
-
-    generated_loss = F.binary_cross_entropy_with_logits(torch.zeros_like(fake_output), fake_output)
-
-    total_discriminator_loss = real_loss + generated_loss
-
-    return total_discriminator_loss
+        return loss

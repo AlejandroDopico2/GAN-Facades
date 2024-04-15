@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from common import DecoderBlock, EncoderBlock
+from models.common import EncoderBlock
 
 class Discriminator(nn.Module):
     def __init__(self ) -> None:
@@ -23,8 +23,8 @@ class Discriminator(nn.Module):
         self.relu = nn.LeakyReLU()
         self.conv2 = nn.Conv2d(512, 1, kernel_size=4, stride=1)
 
-    def forward(self, x1:torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
-        x = torch.cat([x1, x2], dim=1)
+    def forward(self, fake:torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+        x = torch.cat([fake, x], dim=1)
 
         for block in self.encoder:
             x = block(x)

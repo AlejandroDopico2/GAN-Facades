@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from common import DecoderBlock, EncoderBlock
+from models.common import DecoderBlock, EncoderBlock
 
 class UNet(nn.Module):
     def __init__(self, num_blocks:int, filter_size: int) -> None:
@@ -10,7 +10,7 @@ class UNet(nn.Module):
         self.encoder = nn.ModuleList()
         in_channels = 64
         out_channels = 128
-        self.encoder.append(nn.Conv2d(3, 64, kernel_size=filter_size, stride=2, padding=1))
+        self.encoder.append(nn.Conv2d(3, 64, kernel_size=filter_size, stride=2, padding=1, bias=False))
         for _ in range(num_blocks-2):
             self.encoder.append(EncoderBlock(in_channels, out_channels))
             in_channels = out_channels
@@ -29,7 +29,7 @@ class UNet(nn.Module):
         
         # Final convolutional layer in the decoder
         print(in_channels)
-        self.decoder.append(nn.ConvTranspose2d(2*in_channels, 3, kernel_size=filter_size, stride=2, padding=1))
+        self.decoder.append(nn.ConvTranspose2d(2*in_channels, 3, kernel_size=filter_size, stride=2, padding=1, bias=False))
         
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         
@@ -43,7 +43,7 @@ class UNet(nn.Module):
         for block, skip in zip(self.decoder[:-1], skips):
             x = block(x)
             x = torch.cat([x, skip], dim=1)
-            print(f"x {x.shape}, skip {skip.shape}")
+            # print(f"x {x.shape}, skip {skip.shape}")
         x = self.decoder[-1](x)
         return x
     

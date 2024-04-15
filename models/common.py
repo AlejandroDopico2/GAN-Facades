@@ -7,7 +7,7 @@ class EncoderBlock(nn.Module):
 
         self.apply_batchnorm = apply_batchnorm
 
-        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=filters, kernel_size=size, padding=padding, stride=stride)
+        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=filters, kernel_size=size, padding=padding, stride=stride, bias=False)
         self.bn = nn.BatchNorm2d(num_features=filters)
         self.relu = nn.LeakyReLU()
 
@@ -25,7 +25,7 @@ class DecoderBlock(nn.Module):
 
         self.apply_dropout = apply_dropout
 
-        self.conv = nn.ConvTranspose2d(in_channels=in_channels, out_channels=filters, kernel_size=size, padding=padding, stride=stride)
+        self.conv = nn.ConvTranspose2d(in_channels=in_channels, out_channels=filters, kernel_size=size, padding=padding, stride=stride, bias=False)
         self.bn = nn.BatchNorm2d(num_features=filters)
         self.dropout = nn.Dropout(0.5)
         self.relu = nn.ReLU()

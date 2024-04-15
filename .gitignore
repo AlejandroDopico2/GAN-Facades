@@ -1,3 +1,6 @@
 facades.zip
 
 __pycache__
+
+images
+*.pt
