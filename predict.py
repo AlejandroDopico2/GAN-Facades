@@ -9,8 +9,8 @@ import os
 from PIL import Image
 import matplotlib.pyplot as plt
 
-def generate_images(model, test_input, tar, i, device):
 
+def generate_images(model, test_input, tar, i, device):
     test_to_model = torch.permute(test_input, (0, 3, 1, 2)).to(device)
     prediction = model(test_to_model).detach().cpu().numpy()
 
@@ -20,22 +20,26 @@ def generate_images(model, test_input, tar, i, device):
     print("prediction", prediction.shape)
     print("tar", tar.shape)
 
-    plt.figure(figsize=(15,15))
+    plt.figure(figsize=(15, 15))
 
     display_list = [test_input[0], tar[0], prediction[0]]
-    title = ['Input Image', 'Ground Truth', 'Predicted Image']
+    title = ["Input Image", "Ground Truth", "Predicted Image"]
 
     for i in range(3):
-        plt.subplot(1, 3, i+1)
+        plt.subplot(1, 3, i + 1)
         plt.title(title[i])
         # Getting the pixel values in the [0, 1] range to plot.
         img = display_list[i]
         plt.imshow(img * 0.5 + 0.5)
-        plt.axis('off')
-    plt.savefig(f"images/predicted_image.png")
+        plt.axis("off")
+    plt.savefig("images/predicted_image.png")
 
 
-paths = [os.path.join("./facades/", f) for f in os.listdir("./facades/") if f.endswith('.jpg')]
+paths = [
+    os.path.join("./facades/", f)
+    for f in os.listdir("./facades/")
+    if f.endswith(".jpg")
+]
 
 idx = randint(0, len(paths) - 1)
 
@@ -60,5 +64,10 @@ discriminator.load_state_dict(torch.load("models/discriminator.pt"))
 unet = unet.to(device)
 discriminator = discriminator.to(device)
 
-generate_images(unet, torch.tensor(left_half, dtype=torch.float32).unsqueeze(0), torch.tensor(right_half, dtype=torch.float32).unsqueeze(0), 0, device)
-
+generate_images(
+    unet,
+    torch.tensor(left_half, dtype=torch.float32).unsqueeze(0),
+    torch.tensor(right_half, dtype=torch.float32).unsqueeze(0),
+    0,
+    device,
+)
