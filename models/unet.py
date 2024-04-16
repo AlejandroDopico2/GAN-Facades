@@ -39,7 +39,6 @@ class UNet(nn.Module):
                 out_channels = in_channels // 2
 
         # Final convolutional layer in the decoder
-        print(in_channels)
         self.decoder.append(
             nn.ConvTranspose2d(
                 2 * in_channels,
@@ -50,6 +49,8 @@ class UNet(nn.Module):
                 bias=False,
             )
         )
+
+        self.tahn = nn.Tanh()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         skips = []
@@ -64,7 +65,7 @@ class UNet(nn.Module):
             x = torch.cat([x, skip], dim=1)
             # print(f"x {x.shape}, skip {skip.shape}")
         x = self.decoder[-1](x)
-        return x
+        return self.tahn(x)
 
 
 if __name__ == "__main__":

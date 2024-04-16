@@ -30,4 +30,4 @@ class DiscriminatorLoss(nn.Module):
 
         loss = fake_target + real_target
 
-        return loss
+        return loss / 2
