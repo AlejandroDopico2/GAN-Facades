@@ -11,6 +11,7 @@ class EncoderBlock(nn.Module):
         padding: int = 1,
         stride: int = 2,
         apply_batchnorm: bool = True,
+        negative_slope: float = 0.01,
     ) -> None:
         super().__init__()
 
@@ -25,7 +26,7 @@ class EncoderBlock(nn.Module):
             bias=False,
         )
         self.bn = nn.BatchNorm2d(num_features=filters)
-        self.relu = nn.LeakyReLU()
+        self.relu = nn.LeakyReLU(negative_slope=negative_slope)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.conv(x)

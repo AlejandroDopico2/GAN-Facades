@@ -1,6 +1,8 @@
 import torch
 import matplotlib.pyplot as plt
 
+import argparse
+
 from pathlib import Path
 
 from torch.utils.data import DataLoader, sampler
@@ -38,7 +40,7 @@ def generate_images(model, test_input, tar, epoch, device):
     plt.close()
 
 
-def main(data_path: str = "facades"):
+def main(data_path: str = "facades", epochs: int = 100, batch_size: int = 1):
     if torch.cuda.is_available():
         device = torch.device("cuda")
     else:
@@ -75,9 +77,11 @@ def main(data_path: str = "facades"):
 
     example_input, example_target = dataset[0]
 
-    train_loader = DataLoader(dataset, batch_size=1, sampler=train_sampler)
-    val_loader = DataLoader(dataset, batch_size=1, sampler=valid_sampler)
-    test_loader = DataLoader(dataset, batch_size=1, sampler=test_sampler)  # TODO: use
+    train_loader = DataLoader(dataset, batch_size=batch_size, sampler=train_sampler)
+    val_loader = DataLoader(dataset, batch_size=batch_size, sampler=valid_sampler)
+    test_loader = DataLoader(
+        dataset, batch_size=batch_size, sampler=test_sampler
+    )  # TODO: use
 
     generator = UNet(num_blocks=8, filter_size=4).to(device)
     discriminator = Discriminator().to(device)
@@ -94,7 +98,7 @@ def main(data_path: str = "facades"):
     Path("images/").mkdir(exist_ok=True, parents=True)
 
     best_val_loss = np.inf
-    for epoch in range(200):
+    for epoch in range(epochs):
         ge_loss = 0.0
         de_loss = 0.0
 
@@ -176,4 +180,9 @@ def main(data_path: str = "facades"):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--data", default="facades")
+    parser.add_argument("-e", "--epochs", type=int, default=100)
+    parser.add_argument("-b", "--batch_size", type=int, default=1)
+    args = parser.parse_args()
+    main(data_path=args.data, epochs=args.epochs, batch_size=args.batch_size)
