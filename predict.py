@@ -1,7 +1,7 @@
 import torch
 import numpy as np
-from models.unet import UNet
-from models.patch_gan import Discriminator
+from modules.unet import UNet
+from modules.patch_gan import Discriminator
 
 from random import randint
 

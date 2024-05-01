@@ -11,10 +11,10 @@ from torch.optim import Adam
 from tqdm import tqdm
 
 from torchvision import transforms as T
-from data.data import FacadesDataset
+from utils.data import FacadesDataset
 from utils.loss import DiscriminatorLoss, GeneratorLoss
-from models.unet import UNet
-from models.patch_gan import Discriminator
+from modules.unet import UNet
+from modules.patch_gan import Discriminator
 
 import numpy as np
 

@@ -1,16 +1,22 @@
 import torch
 import torch.nn as nn
 
-from models.common import DecoderBlock, EncoderBlock
+from modules.common import DecoderBlock, EncoderBlock
 
 
 class UNet(nn.Module):
-    def __init__(self, num_blocks: int, filter_size: int) -> None:
+    def __init__(
+            self, 
+            num_blocks: int, 
+            filter_size: int, 
+            n_classes: int = 3,
+            in_channels: int = 64,
+            out_channels: int = 128,
+            activation: nn.Module = nn.Tanh()
+        ) -> None:
         super().__init__()
 
         self.encoder = nn.ModuleList()
-        in_channels = 64
-        out_channels = 128
         self.encoder.append(
             nn.Conv2d(3, 64, kernel_size=filter_size, stride=2, padding=1, bias=False)
         )
@@ -42,15 +48,14 @@ class UNet(nn.Module):
         self.decoder.append(
             nn.ConvTranspose2d(
                 2 * in_channels,
-                3,
+                n_classes,
                 kernel_size=filter_size,
                 stride=2,
                 padding=1,
                 bias=False,
             )
         )
-
-        self.tahn = nn.Tanh()
+        self.activation = activation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         skips = []
@@ -65,7 +70,7 @@ class UNet(nn.Module):
             x = torch.cat([x, skip], dim=1)
             # print(f"x {x.shape}, skip {skip.shape}")
         x = self.decoder[-1](x)
-        return self.tahn(x)
+        return self.activation(x)
 
 
 if __name__ == "__main__":

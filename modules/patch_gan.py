@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-
-from models.common import EncoderBlock
+from modules.common import EncoderBlock
 
 
 class Discriminator(nn.Module):
