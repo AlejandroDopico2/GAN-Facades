@@ -30,13 +30,16 @@ class FacadesDataset(Dataset):
         input_image = image.crop((256, 0, 512, 256))
         
         if self.transform:
-            real_image, input_image = map(self.transform, (real_image, input_image))
+            # set random seed 
+            seed = np.random.randint(123)
+            torch.manual_seed(seed)
+            real_image = self.transform(real_image)
+            torch.manual_seed(seed)
+            input_image = self.transform(input_image)
         
         return real_image, input_image
     
-    def split(self, *sizes: List[Union[int, float]], shuffle: bool = True, seed: Optional[int] = 123) -> Tuple[FacadesDataset]:
-        if seed is not None:
-            random.seed(seed)
+    def split(self, *sizes: List[Union[int, float]], shuffle: bool = True) -> Tuple[FacadesDataset]:
         if shuffle:
             random.shuffle(self.image_paths)
         lens = [int(len(self)*ratio) for ratio in sizes] if isinstance(sizes[0], float) else sizes

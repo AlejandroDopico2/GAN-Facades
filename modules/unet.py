@@ -1,61 +1,42 @@
 import torch
 import torch.nn as nn
-
-from modules.common import DecoderBlock, EncoderBlock
+from modules.common import ConvBlock, TransposedConvBlock, DeformableConvBlock
 
 
 class UNet(nn.Module):
-    def __init__(
-            self, 
-            num_blocks: int, 
-            filter_size: int, 
-            n_classes: int = 3,
-            in_channels: int = 64,
-            out_channels: int = 128,
-            activation: nn.Module = nn.Tanh()
-        ) -> None:
+    """PyTorch implementation of the U-Net proposed in the Pix2Pix model at https://arxiv.org/abs/1611.07004."""
+    
+    KERNEL_SIZE = 4
+    STRIDE = 2
+    ENCODER = [64, 128, 256, 512, 512, 512]
+    DECODER = [512, 512, 256, 128, 64]
+
+    def __init__(self, n_in: int, n_out: int, conv: str = 'base'):
         super().__init__()
 
         self.encoder = nn.ModuleList()
-        self.encoder.append(
-            nn.Conv2d(3, 64, kernel_size=filter_size, stride=2, padding=1, bias=False)
+        last = n_in
+        for i, n in enumerate(self.ENCODER):
+            params = dict(k=self.KERNEL_SIZE, batch_norm=(i != 0), stride=self.STRIDE, act=nn.LeakyReLU(0.2), padding=1)
+            if conv == 'base':
+                block = ConvBlock(last, n, **params, bias=(i!=0))
+            elif conv == 'deform':
+                block = DeformableConvBlock(last, n, **params)
+            else:
+                raise NotImplementedError
+            self.encoder.append(block)
+            last = n 
+            
+        self.decoder = nn.ModuleList(
+            [TransposedConvBlock(last, self.DECODER[0], self.KERNEL_SIZE, stride=self.STRIDE, batch_norm=True, act=nn.LeakyReLU(0.2), dropout=0.5, padding=1)]
         )
-        for _ in range(num_blocks - 2):
-            self.encoder.append(EncoderBlock(in_channels, out_channels))
-            in_channels = out_channels
-            out_channels = min(out_channels * 2, 512)
-
-        self.encoder.append(
-            EncoderBlock(in_channels, out_channels, apply_batchnorm=False)
-        )
-
-        self.decoder = nn.ModuleList()
-        self.decoder.append(DecoderBlock(in_channels, out_channels, apply_dropout=True))
-        for i in range(num_blocks - 2):
-            self.decoder.append(
-                DecoderBlock(
-                    2 * in_channels,
-                    out_channels,
-                    apply_dropout=True if i < 2 else False,
-                )
-            )
-
-            if i > 1:
-                in_channels = out_channels
-                out_channels = in_channels // 2
-
-        # Final convolutional layer in the decoder
-        self.decoder.append(
-            nn.ConvTranspose2d(
-                2 * in_channels,
-                n_classes,
-                kernel_size=filter_size,
-                stride=2,
-                padding=1,
-                bias=False,
-            )
-        )
-        self.activation = activation
+        last = self.DECODER[0]
+        for j, n in zip(range(2, len(self.DECODER)+1), self.DECODER[1:]):
+            block = TransposedConvBlock(self.ENCODER[-j]+last, n, self.KERNEL_SIZE, batch_norm=True, stride=self.STRIDE, act=nn.LeakyReLU(0.2), dropout=0.5, padding=1)
+            self.decoder.append(block)
+            last = n 
+        self.out = TransposedConvBlock(last+self.ENCODER[0], n_out, self.KERNEL_SIZE, stride=self.STRIDE, padding=1, bias=False)
+        self.act = nn.Tanh()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         skips = []
@@ -63,19 +44,59 @@ class UNet(nn.Module):
             x = block(x)
             skips.append(x)
 
-        skips = reversed(skips[:-1])
-
-        for block, skip in zip(self.decoder[:-1], skips):
+        for block, skip in zip(self.decoder, reversed(skips[:-1])):
             x = block(x)
             x = torch.cat([x, skip], dim=1)
-            # print(f"x {x.shape}, skip {skip.shape}")
-        x = self.decoder[-1](x)
-        return self.activation(x)
+        x = self.act(self.out(x))
+        return x 
+    
 
+    
+class AttentionUNet(nn.Module):
+    
+    KERNEL_SIZE = 4
+    STRIDE = 2
+    ENCODER = [64, 128, 256, 512, 512, 512, 512]
+    DECODER = [512, 512, 512, 256, 128, 64]
 
-if __name__ == "__main__":
-    net = UNet(8, 4)
+    def __init__(self, n_in: int, n_out: int, conv: str = 'base'):
+        super().__init__()
 
-    x = torch.rand(1, 3, 256, 256)
+        self.encoder = nn.ModuleList()
+        last = n_in
+        for i, n in enumerate(self.ENCODER):
+            params = dict(k=self.KERNEL_SIZE, batch_norm=(i != 0), stride=self.STRIDE, act=nn.LeakyReLU(0.2), padding=1)
+            if conv == 'base':
+                block = ConvBlock(last, n, **params)
+            elif conv == 'deform':
+                block = DeformableConvBlock(last, n, **params)
+            else:
+                raise NotImplementedError
+            self.encoder.append(block)
+            last = n 
+            
+        self.decoder = nn.ModuleList(
+            [TransposedConvBlock(last, self.DECODER[0], self.KERNEL_SIZE, stride=self.STRIDE, batch_norm=True, act=nn.ReLU(), dropout=0.5, padding=1)]
+        )
+        last = self.DECODER[0]
+        self.attns = [AttentionBlock(last, self.ENCODER[-1], last)]
+        for j, n in zip(range(2, len(self.DECODER)+1), self.DECODER[1:]):
+            block = TransposedConvBlock(last, n, self.KERNEL_SIZE, batch_norm=True, stride=self.STRIDE, act=nn.ReLU(), dropout=0.5, padding=1)
+            self.decoder.append(block)
+            self.attns.append(AttentionBlock(n, self.ENCODER[-j-1], n))
+            last = n 
+        self.out = TransposedConvBlock(last, n_out, k=self.KERNEL_SIZE, stride=self.STRIDE, padding=1)
+        self.act = nn.Tanh()
 
-    x = net(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        skips = []
+        for block in self.encoder:
+            x = block(x)
+            skips.append(x)
+
+        for block, skip, attn in zip(self.decoder, reversed(skips[:-1]), self.attns):
+            x = block(x)
+            x = attn(x, skip)
+        x = self.act(self.out(x))
+        return x 
+    

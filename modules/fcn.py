@@ -83,7 +83,7 @@ class FCN8s(nn.Module):
         # Load pre-trained model
         self.backbone = pretrained_net
 
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.LeakyReLU(0.5, inplace=True)
         self.conv1 = nn.ConvTranspose2d(
             512, 512, kernel_size=3, stride=2, padding=1, dilation=1, output_padding=1
         )
@@ -104,8 +104,8 @@ class FCN8s(nn.Module):
             64, 32, kernel_size=3, stride=2, padding=1, dilation=1, output_padding=1
         )
         self.bn5 = nn.BatchNorm2d(32)
-
         self.classifier = nn.Conv2d(32, num_classes, kernel_size=1)
+        self.act = nn.Tanh()
 
     def forward(self, x):
         # Backbone
@@ -125,6 +125,6 @@ class FCN8s(nn.Module):
         x = self.bn5(self.relu(self.conv5(x)))
         x = self.classifier(x)
 
-        return x
+        return self.act(x)
 
 

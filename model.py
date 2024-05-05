@@ -7,17 +7,19 @@ from utils import FacadesDataset, Metric
 import numpy as np 
 from PIL import Image
 from torchvision.utils import save_image
+from torchvision.transforms import ToTensor, Compose, RandomHorizontalFlip, RandomAffine, Normalize, Lambda
 
-class VisionModel:
-    """Abstract representation of a Vision Model that implements the general train, predict and 
+class FacadesModel:
+    """Abstract representation of a Facades Model that implements the general train, predict and 
     evaluation methods."""
     
     # specify evaluation metric and data transformation
     METRIC = None
-    TRANSFORM = None
     
-    def __init__(self, device: str):
+    def __init__(self, device: str = 'cuda:0'):
         self.device = device 
+        self.TRANSFORM = Compose([ToTensor(), Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
+        # self.TRANSFORM = Compose([ToTensor(), Lambda(lambda x: (x-x.min()/(x.max()-x.min())))])
         
     def train(
             self,
@@ -27,8 +29,9 @@ class VisionModel:
             epochs: int = 100,
             batch_size: int = 20, 
             train_patience: int = 20,
-            dev_patience: int = 10
-        ):
+            dev_patience: int = 10,
+            aug: bool = False
+        ) -> Metric:
         """Model training with:
         - Early stopping over the train and dev set.
         - Prediction of the validation set.
@@ -44,19 +47,28 @@ class VisionModel:
         """
         if not os.path.exists(path):
             os.makedirs(path)
-        train.transform = self.TRANSFORM
+        if not os.path.exists(f'{path}/preds/'):
+            os.makedirs(f'{path}/preds/')
+        if aug:
+            train.transform = Compose(self.TRANSFORM.transforms + [
+                RandomHorizontalFlip(0.5)
+            ])
+        else:
+            train.transform = self.TRANSFORM
         train_dl = DataLoader(train, batch_size, shuffle=True)
         
         best_metric, train_loss, train_improv, dev_improv = self.METRIC(), np.Inf, train_patience, dev_patience
+        best_metric._loss = np.Inf
         for epoch in range(1, epochs+1):
             with tqdm(desc='train', total=len(train)) as bar:
-                for imgs, masks in train_dl:
-                    losses = self.forward(imgs.to(self.device), masks.to(self.device))
+                for reals, masks in train_dl:
+                    losses = self.forward(reals.to(self.device), masks.to(self.device))
                     self.backward(**losses)
-                    bar.update(imgs.shape[0])
+                    bar.update(reals.shape[0])
                     bar.set_postfix({name: round(float(value.detach()), 2) for name, value in losses.items()})
                     
             dev_metric = self.evaluate(dev, batch_size)
+            self.predict(dev, f'{path}/preds', batch_size)
 
             if dev_metric.improves(best_metric):
                 print(f'Epoch {epoch}: (improved)')
@@ -82,10 +94,8 @@ class VisionModel:
                 
         # save dev inputs 
         self = self.__class__.load(path, self.device)
-        
-        if not os.path.exists(f'{path}/preds/'):
-            os.makedirs(f'{path}/preds/')
-        self.predict(dev, f'{path}/preds', batch_size)
+        best_metric.save(f'{path}/result.pickle')
+        return best_metric
 
     
     @torch.no_grad()
@@ -102,7 +112,7 @@ class VisionModel:
         data.transform = self.TRANSFORM
         data_dl = DataLoader(data, batch_size, shuffle=False)
         metric = self.METRIC()
-        for inputs, targets in tqdm(data_dl, total=len(data), desc='eval'):
+        for inputs, targets in tqdm(data_dl, total=len(data_dl), desc='eval'):
             metric += self.eval_step(inputs.to(self.device), targets.to(self.device))
         return metric 
     
@@ -117,14 +127,13 @@ class VisionModel:
         """
         data.transform = self.TRANSFORM
         data_dl = DataLoader(data, batch_size, shuffle=False)
-        i = 0
-        for inputs, targets in tqdm(data_dl, total=len(data), desc='predict'):
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
-            outputs = self.pred_step(inputs, targets)
-            for input, target, output in zip(inputs.unbind(0), targets.unbind(0), outputs.unbind(0)):
-                concat = torch.cat([x for x in (input, target, output) if len(x.shape) == len(output.shape)], 1)
-                save_image(concat, f'{path}/preds/{i}.jpg')
-                i += 1
+        preds = []
+        for reals, masks in tqdm(data_dl, total=len(data_dl), desc='predict'):
+            reals, masks = reals.to(self.device), masks.to(self.device)
+            preds += self.pred_step(reals, masks).unbind(0)
+        for img_path, pred in zip(data.image_paths, preds):
+            filename = img_path.split('/')[-1]
+            save_image(pred, f'{path}/{filename}')
             
     """Specific methods that must be implemented in inherited models."""
             
@@ -135,16 +144,16 @@ class VisionModel:
         raise NotImplementedError
     
     @torch.no_grad()
-    def eval_step(self, inputs: torch.Tensor, targets: torch.Tensor) -> Metric:
+    def eval_step(self, reals: torch.Tensor, masks: torch.Tensor) -> Metric:
         raise NotImplementedError
     
     @torch.no_grad()
-    def pred_step(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    def pred_step(self, reals: torch.Tensor, masks: torch.Tensor): 
         raise NotImplementedError
 
     def save(self, path: str):
         raise NotImplementedError
     
     @classmethod
-    def load(cls, path: str, device: str) -> VisionModel:
+    def load(cls, path: str, device: str) -> FacadesModel:
         raise NotImplementedError

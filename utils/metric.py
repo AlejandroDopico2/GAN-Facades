@@ -1,8 +1,5 @@
 from __future__ import annotations
-from typing import Optional
-from torch import nn 
-import torch 
-
+import torch, pickle 
 
 class Metric:
     METRICS = None 
@@ -37,34 +34,30 @@ class Metric:
     
     def improves(self, other: Metric) -> bool:
         if self.MODE == 'max':
-            return any(getattr(self, metric) > getattr(other, metric) for metric in self.METRICS)
+            return any(getattr(self, metric) > getattr(other, metric) for metric in self.KEY)
         else:
-            return any(getattr(self, metric) < getattr(other, metric) for metric in self.METRICS)
+            return any(getattr(self, metric) < getattr(other, metric) for metric in self.KEY)
     
     def __sub__(self, other: Metric) -> bool:
         for attr in self.ATTRIBUTES:
             self.__setattr__(attr, getattr(self, attr) - getattr(other, attr))
         return self 
         
+    def save(self, path: str):
+        with open(path, 'wb') as writer:
+            values = {metric: getattr(self, metric) for metric in self.METRICS}
+            pickle.dump(values, writer)
         
 
 class SegmentationMetric(Metric):
     METRICS = ['PACC', 'MACC', 'MIU', 'FWIU']
+    KEY = ['PACC', 'MACC', 'MIU', 'FWIU']
     ATTRIBUTES = ['pacc', 'macc', 'miu', 'fwiu']
     SCALE = ['PACC', 'MACC', 'MIU', 'FWIU']
     MODE = 'max'
     eps = 1e-12
     
     def __call__(self, preds: torch.Tensor, golds: torch.Tensor) -> SegmentationMetric:
-        """Compute the semantic segmentation metrics.
-
-        Args:
-            preds (torch.Tensor): ``[batch_size, height, width]``.
-            golds (torch.Tensor): ``[batch_size, height, width]``.
-
-        Returns:
-            SegmentationMetric.
-        """
         labels, counts = golds.unique(return_counts=True)
         # true positives
         tps = torch.tensor([((golds == label) & (preds == label)).sum() for label in labels]).to(preds.device)
@@ -105,20 +98,29 @@ class SegmentationMetric(Metric):
     
     
 class GenerationMetric(SegmentationMetric):
-    METRICS = ['rPACC', 'rMACC', 'rMIU', 'rFWIU', 'fPACC', 'fMACC', 'fMIU', 'fFWIU']
-    ATTRIBUTES = ['real_pacc', 'real_macc', 'real_miu', 'real_fwiu', 'fake_pacc', 'fake_macc', 'fake_miu', 'fake_fwiu']
+    METRICS = ['rPACC', 'rMACC', 'rMIU', 'rFWIU', 'fPACC', 'fMACC', 'fMIU', 'fFWIU', 'iMAE']
+    ATTRIBUTES = ['real_pacc', 'real_macc', 'real_miu', 'real_fwiu', 'fake_pacc', 'fake_macc', 'fake_miu', 'fake_fwiu', 'imae']
     SCALE =  ['rPACC', 'rMACC', 'rMIU', 'rFWIU', 'fPACC', 'fMACC', 'fMIU', 'fFWIU']
+    KEY = ['iMAE']
     MODE = 'max'
     eps = 1e-12
     
-    def __call__(self, real_segmented: torch.Tensor, fake_segemented: torch.Tensor, labels: torch.Tensor):
-        real_metric = SegmentationMetric(real_segmented, labels)
-        fake_metric = SegmentationMetric(fake_segemented, labels)
+    def __call__(
+            self, 
+            fakes: torch.Tensor,
+            fakes_segmented: torch.Tensor,
+            reals: torch.Tensor,
+            reals_segmented: torch.Tensor, 
+            labels: torch.Tensor
+        ):
+        real_metric = SegmentationMetric(reals_segmented, labels)
+        fake_metric = SegmentationMetric(fakes_segmented, labels)
         for attr in real_metric.ATTRIBUTES:
             self.__setattr__(f'real_{attr}', getattr(self, f'real_{attr}') + getattr(real_metric, attr))
         for attr in fake_metric.ATTRIBUTES:
             self.__setattr__(f'fake_{attr}', getattr(self, f'fake_{attr}') + getattr(fake_metric, attr))
         self.n += 1 
+        self.imae += (1-(fakes-reals).abs().mean())
         return self 
     
     @property
@@ -152,4 +154,8 @@ class GenerationMetric(SegmentationMetric):
     @property 
     def fFWIU(self) -> float:
         return self.fake_fwiu/(self.n+self.eps)
+    
+    @property
+    def iMAE(self) -> float:
+        return float(self.imae)/(self.n+self.eps)
         

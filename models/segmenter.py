@@ -1,5 +1,5 @@
 from __future__ import annotations
-from model import VisionModel
+from model import FacadesModel
 from typing import Tuple, Callable, Dict, Union, Optional , List 
 from torch.optim import Adam, RMSprop
 from torch import nn 
@@ -8,57 +8,68 @@ import numpy as np
 from utils import FacadesDataset, SegmentationMetric
 from modules import VGGNet, FCN8s
 from kmeans_pytorch import kmeans, kmeans_predict
-from torchvision.transforms import Compose, ToTensor, Normalize, Lambda 
+from torchvision.transforms import Compose, ToTensor, Normalize, RandomHorizontalFlip, RandomAffine
 from PIL import Image
+from torch.nn.functional import sigmoid
 
-class SemanticSegmenter(VisionModel):
+class SemanticSegmenter(FacadesModel):
     METRIC = SegmentationMetric
     N_KMEANS = 100
-    TRANSFORM = Compose([ToTensor(), Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
     
     def __init__(self, model: nn.Module, centers: torch.Tensor, device: str):
         super().__init__(device)
         self.centers = centers
         self.model = model 
-        self.loss = nn.CrossEntropyLoss()
+        self.loss = nn.BCEWithLogitsLoss()
         
-        
-    def train(self, train: FacadesDataset, *args, opt: Callable = RMSprop, lr: float = 1e-4, **kwargs):
+    def train(self, train: FacadesDataset, *args, opt: Callable = Adam, lr: float = 1e-4, **kwargs):
         # train kmeans 
-        train.transform = self.TRANSFORM 
-        points = torch.stack([train[i][1] for i in range(self.N_KMEANS)], 0).permute(0, 2, 3, 1).flatten(0, -2)
-        _, centers = kmeans(X=points, num_clusters=self.centers.shape[0], device=self.device, distance='cosine')
-        self.centers = centers 
+        train.transform = self.TRANSFORM
+        points = torch.cat([train[i][1].flatten(1,2) for i in range(self.N_KMEANS)], 1).permute(1,0)
+        _, self.centers = kmeans(X=points, num_clusters=self.centers.shape[0], device=self.device, distance='euclidean')
         self.optimizer = opt(self.model.parameters(), lr=lr)
         super().train(train, *args, **kwargs)
         
-    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> Dict[str, torch.Tensor]:
-        labeled = self.get_labels(targets)
-        outputs = self.model(inputs)
-        loss = self.loss(outputs.permute(0, 2, 3, 1).reshape(-1, self.centers.shape[0]), labeled.flatten())
+    def forward(self, reals: torch.Tensor, masks: torch.Tensor) -> Dict[str, torch.Tensor]:
+        segmented = self.segment(masks)
+        outputs = self.model(reals)
+        loss = self.loss(outputs.flatten(), segmented.flatten())
         return {'loss': loss}
     
     def backward(self, loss: torch.Tensor):
         self.optimizer.zero_grad()
         loss.backward()
-        nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=4.0, norm_type=2)
         self.optimizer.step()
 
     @torch.no_grad()
-    def eval_step(self, inputs: torch.Tensor, targets: torch.Tensor)  -> SegmentationMetric:
-        labeled = self.get_labels(targets)
-        outputs = self.pred_step(inputs, targets)
-        return SegmentationMetric(outputs, labeled)
+    def eval_step(self, reals: torch.Tensor, masks: torch.Tensor)  -> SegmentationMetric:
+        labeled = self.label(masks)
+        outputs = self.label(self.model(reals))
+        return SegmentationMetric(outputs.flatten(), labeled.flatten())
     
     @torch.no_grad()
-    def pred_step(self, inputs: torch.Tensor, _: torch.Tensor) -> torch.Tensor:
-        return self.model(inputs).argmax(1)
+    def pred_step(self, reals: torch.Tensor, masks: torch.Tensor) -> torch.Tensor:
+        segmented = self.segment(masks)
+        preds = self.segment(self.model(reals))
+        return torch.cat([reals, segmented, preds], -1)*0.5+0.5
 
-    def get_labels(self, targets: torch.Tensor) -> torch.Tensor:
+    def segment(self, x: torch.Tensor) -> torch.Tensor:
         with contextlib.redirect_stdout(None):
-            labeled = kmeans_predict(targets.permute(0, 2, 3, 1).flatten(0, -2), self.centers, 'cosine', device=self.device)
-        labeled = labeled.reshape(targets.shape[0], *targets.shape[-2:]).to(self.device)
-        return labeled
+            segments = []
+            for img in x.unbind(0):
+                labs = kmeans_predict(img.flatten(1,2).T, self.centers, 'euclidean', device=self.device)
+                segment = self.centers[labs].reshape(*img.shape[-2:], -1).permute(2, 0, 1)
+                segments.append(segment)
+        return torch.stack(segments, 0).to(self.device)
+    
+    def label(self, x: torch.Tensor) -> torch.Tensor:
+        with contextlib.redirect_stdout(None):
+            labels = []
+            for img in x.unbind(0):
+                labs = kmeans_predict(img.flatten(1,2).T, self.centers, 'euclidean', device=self.device)
+                labeled = labs.reshape(*img.shape[-2:])
+                labels.append(labeled)
+        return torch.stack(labels, 0).to(self.device)
     
     def save(self, path: str):
         torch.save(self.centers, f'{path}/centers.pt')
@@ -71,14 +82,10 @@ class SemanticSegmenter(VisionModel):
         return SemanticSegmenter(model, centers, device)
     
     @classmethod
-    def build(
-            cls, 
-            n_labels: int = 4,
-            device: str = 'cuda:0'
-        ):
+    def build(cls, n_labels: int = 5, device: str = 'cuda:0'):
         # random centers 
-        centers = torch.empty(n_labels, 3)
+        centers = torch.zeros(n_labels, 3)
         vgg_model = VGGNet(requires_grad=True).to(device)
-        model = FCN8s(n_labels, vgg_model).to(device)
+        model = FCN8s(3, vgg_model).to(device)
         return cls(model, centers, device)
     
