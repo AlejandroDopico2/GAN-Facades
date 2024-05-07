@@ -1,13 +1,22 @@
 from models import SemanticSegmenter, AdversarialTranslator
 from utils import FacadesDataset
+from argparse import ArgumentParser
+
 
 if __name__ == '__main__':
-    data = FacadesDataset.from_folder('facades')
+    parser = ArgumentParser(description='Image translation system')
+    parser.add_argument('gen_type', type=str, help='Generator type')
+    parser.add_argument('--path', '-p', type=str, help='Path where to store the image translator')
+    parser.add_argument('--data', type=str, default='facades', help='Facades dataset folder')
+    parser.add_argument('--segmenter', '-s', type=str, default='results/segmenter', help='Segmenter path')
+    parser.add_argument('-d', '--device', type=str, default='cuda:0', help='CUDA device')
+    parser.add_argument('--weights', action='store_true', help='Whether to use weighted loss')
+    parser.add_argument('--epochs', type=int, default=400, help='Number of training epochs')
+
+    args = parser.parse_args()
+    data = FacadesDataset.from_folder(args.path)    
     train, dev, test = data.split(0.1, 0.1)
     
-    # segmenter = SemanticSegmenter.build(n_labels=5, device='cuda:1')
-    # segmenter.train(train, dev, test, path='results/segmenter/', aug=True)
-    segmenter = SemanticSegmenter.load('results/segmenter2', device='cuda:1')
-    adversarial = AdversarialTranslator.build(segmenter, gen_type='base', device='cuda:1')
-    adversarial.train(train, dev, test, path=f'prueba-base/', lr=2e-4, batch_size=1, aug=True)
-    
+    segmenter = SemanticSegmenter.load(args.segmenter, device=args.device)
+    adversarial = AdversarialTranslator.build(segmenter, gen_type=args.gen_type, weights=args.weights, device=args.device)
+    adversarial.train(train, dev, test, path=args.path, lr=2e-4, batch_size=1, aug=True)

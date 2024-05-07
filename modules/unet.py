@@ -17,7 +17,7 @@ class UNet(nn.Module):
         self.encoder = nn.ModuleList()
         last = n_in
         for i, n in enumerate(self.ENCODER):
-            params = dict(k=self.KERNEL_SIZE, batch_norm=(i != 0), stride=self.STRIDE, act=nn.LeakyReLU(0.2), padding=1, bias=False)
+            params = dict(k=self.KERNEL_SIZE, batch_norm=(i != 0), stride=self.STRIDE, act=nn.LeakyReLU(0.2, inplace=True), padding=1, bias=False)
             if conv == 'base':
                 block = ConvBlock(last, n, **params)
             elif conv == 'deform':
@@ -27,13 +27,12 @@ class UNet(nn.Module):
             self.encoder.append(block)
             last = n 
 
-        params = dict(k=self.KERNEL_SIZE, stride=self.STRIDE, batch_norm=True, act=nn.LeakyReLU(0.2), dropout=0.5, padding=1, bias=False)
         self.decoder = nn.ModuleList(
-            [TransposedConvBlock(last, self.DECODER[0], **params)]
+            [TransposedConvBlock(last, self.DECODER[0], self.KERNEL_SIZE, stride=self.STRIDE, padding=1, act=nn.ReLU(inplace=True), batch_norm=False, bias=False, dropout=0.5)]
         )
         last = self.DECODER[0]
         for j, n in zip(range(2, len(self.DECODER)+1), self.DECODER[1:]):
-            block = TransposedConvBlock(self.ENCODER[-j]+last, n, **params)
+            block = TransposedConvBlock(self.ENCODER[-j]+last, n, self.KERNEL_SIZE, stride=self.STRIDE, padding=1, act=nn.ReLU(inplace=True), batch_norm=True, bias=False, dropout=0.5*(j < 4))
             self.decoder.append(block)
             last = n 
         self.out = TransposedConvBlock(last+self.ENCODER[0], n_out, self.KERNEL_SIZE, stride=self.STRIDE, padding=1, bias=False)
@@ -66,7 +65,7 @@ class AttentionUNet(nn.Module):
         self.encoder = nn.ModuleList()
         last = n_in
         for i, n in enumerate(self.ENCODER):
-            params = dict(k=self.KERNEL_SIZE, batch_norm=(i != 0), stride=self.STRIDE, act=nn.LeakyReLU(0.2), padding=1)
+            params = dict(k=self.KERNEL_SIZE, batch_norm=(i != 0), stride=self.STRIDE, act=nn.LeakyReLU(0.2, inplace=True), padding=1, bias=False)
             if conv == 'base':
                 block = ConvBlock(last, n, **params)
             elif conv == 'deform':
@@ -77,16 +76,16 @@ class AttentionUNet(nn.Module):
             last = n 
             
         self.decoder = nn.ModuleList(
-            [TransposedConvBlock(last, self.DECODER[0], self.KERNEL_SIZE, stride=self.STRIDE, batch_norm=True, act=nn.ReLU(), dropout=0.5, padding=1)]
+            [TransposedConvBlock(last, self.DECODER[0], self.KERNEL_SIZE, stride=self.STRIDE, batch_norm=False, act=nn.ReLU(inplace=True), dropout=0.5, padding=1, bias=False)]
         )
         last = self.DECODER[0]
         self.attns = nn.ModuleList([AttentionBlock(last, self.ENCODER[-1], last)])
         for j, n in zip(range(2, len(self.DECODER)+1), self.DECODER[1:]):
-            block = TransposedConvBlock(last, n, self.KERNEL_SIZE, batch_norm=True, stride=self.STRIDE, act=nn.ReLU(), dropout=0.5, padding=1)
+            block = TransposedConvBlock(last, n, self.KERNEL_SIZE, batch_norm=True, stride=self.STRIDE, act=nn.ReLU(inplace=True), dropout=0.5*(j<4), padding=1, bias=False)
             self.decoder.append(block)
             self.attns.append(AttentionBlock(n, self.ENCODER[-j-1], n))
             last = n 
-        self.out = TransposedConvBlock(last, n_out, k=self.KERNEL_SIZE, stride=self.STRIDE, padding=1)
+        self.out = TransposedConvBlock(last, n_out, k=self.KERNEL_SIZE, stride=self.STRIDE, padding=1, bias=False)
         self.act = nn.Tanh()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

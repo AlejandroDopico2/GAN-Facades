@@ -12,7 +12,7 @@ class ConvBlock(nn.Module):
             n_out: Optional[int] = None, 
             k: int = 3,
             batch_norm: bool = True,
-            act: nn.Module = nn.LeakyReLU(0.1),
+            act: nn.Module = nn.Identity(),
             dropout: float = 0.0,
             n_layers: int = 1,
             **kwargs
@@ -54,7 +54,7 @@ class TransposedConvBlock(nn.Module):
             n_out: Optional[int] = None, 
             k: int = 3,
             batch_norm: bool = True,
-            act: nn.Module = nn.LeakyReLU(0.1),
+            act: nn.Module = nn.Identity(),
             dropout: float = 0.0,
             **kwargs
         ):
@@ -85,7 +85,7 @@ class DeformableConvBlock(nn.Module):
             n_out: Optional[int] = None, 
             k: int = 3,
             batch_norm: bool = True,
-            act: nn.Module = nn.LeakyReLU(0.1),
+            act: nn.Module = nn.Identity(),
             dropout: float = 0.0,
             padding: int = 0,
             stride: int = 1,

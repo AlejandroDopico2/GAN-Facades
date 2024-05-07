@@ -13,7 +13,7 @@ class ConditionalDiscriminator(nn.Module):
         self.encoder = nn.ModuleList()
         last = n_in*2
         for i, n in enumerate(self.N_FILTERS):
-            params = dict(k=self.KERNEL_SIZE, stride=self.STRIDE, batch_norm=(i!=0), act=nn.LeakyReLU(0.2), padding=1)
+            params = dict(k=self.KERNEL_SIZE, stride=self.STRIDE, batch_norm=(i!=0), act=nn.LeakyReLU(0.2, inplace=True), padding=1)
             if conv == 'base':
                 block = ConvBlock(last, n, **params)
             elif conv == 'deform':

@@ -25,15 +25,15 @@ class AdversarialTranslator(FacadesModel):
             discriminator: nn.Module,
             segmenter: SemanticSegmenter,
             device: str,
+            weights: bool = False
         ):
         super().__init__(device)
         self.generator = generator 
         self.discriminator = discriminator 
         self.segmenter = segmenter
-        self.gen_loss = GeneratorLoss()
+        self.gen_loss = GeneratorLoss(weights=weights)
         self.dis_loss = DiscriminatorLoss()
         self.seg_loss = nn.BCEWithLogitsLoss()
-        self.optimize = 0
         
     def train(self, *args, opt: Callable = Adam, lr: float = 2e-4, **kwargs):
         """Override the general train function to specify the generator and discriminator optimizers.
@@ -112,7 +112,8 @@ class AdversarialTranslator(FacadesModel):
             segmenter: Union[str, SemanticSegmenter], 
             gen_type: str = 'base',
             pretrained: str = 'resnext50_32x4d',
-            device: str = 'cuda:0'
+            device: str = 'cuda:0',
+            weights: bool = False
         ):
         """Build an adversarial image-to-image translator.
 
@@ -142,7 +143,7 @@ class AdversarialTranslator(FacadesModel):
         else:
             raise NotImplementedError(f'The generator type {gen_type} is not avaiable')
         discriminator = ConditionalDiscriminator(3, conv='base')
-        return AdversarialTranslator(generator.to(device), discriminator.to(device), segmenter, device)
+        return AdversarialTranslator(generator.to(device), discriminator.to(device), segmenter, device, weights=weights)
         
                 
         
