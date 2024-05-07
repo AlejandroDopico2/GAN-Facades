@@ -25,12 +25,13 @@ class FacadesModel:
             self,
             train: FacadesDataset,
             dev: FacadesDataset,
+            test: FacadesDataset,
             path: str, 
-            epochs: int = 100,
+            epochs: int = 500,
             batch_size: int = 20, 
             train_patience: int = 20,
             dev_patience: int = 10,
-            aug: bool = False
+            aug: bool = True
         ) -> Metric:
         """Model training with:
         - Early stopping over the train and dev set.
@@ -47,8 +48,6 @@ class FacadesModel:
         """
         if not os.path.exists(path):
             os.makedirs(path)
-        if not os.path.exists(f'{path}/preds/'):
-            os.makedirs(f'{path}/preds/')
         if aug:
             train.transform = Compose(self.TRANSFORM.transforms + [
                 RandomHorizontalFlip(0.5)
@@ -57,8 +56,8 @@ class FacadesModel:
             train.transform = self.TRANSFORM
         train_dl = DataLoader(train, batch_size, shuffle=True)
         
-        best_metric, train_loss, train_improv, dev_improv = self.METRIC(), np.Inf, train_patience, dev_patience
-        best_metric._loss = np.Inf
+        train_loss, train_improv, dev_improv = np.Inf, train_patience, dev_patience
+        best_loss, best_metric = np.Inf, self.METRIC()
         for epoch in range(1, epochs+1):
             with tqdm(desc='train', total=len(train)) as bar:
                 for reals, masks in train_dl:
@@ -67,39 +66,42 @@ class FacadesModel:
                     bar.update(reals.shape[0])
                     bar.set_postfix({name: round(float(value.detach()), 2) for name, value in losses.items()})
                     
-            dev_metric = self.evaluate(dev, batch_size)
-            self.predict(dev, f'{path}/preds', batch_size)
+            val_loss, dev_metric = self.evaluate(dev, batch_size)
+            test_loss, test_metric = self.evaluate(dev, batch_size)
 
-            if dev_metric.improves(best_metric):
+            if val_loss < best_loss or dev_metric.improves(best_metric):
                 print(f'Epoch {epoch}: (improved)')
                 dev_improv = dev_patience
-                best_metric = dev_metric
+                best_loss = val_loss
+                best_metric = dev_metric 
+                self.predict(test, f'{path}/test', batch_size)
                 self.save(path)
             else:
                 print(f'Epoch {epoch}:')
                 dev_improv -= 1
-            print(f'[dev]: {repr(dev_metric)}')
+            print(f'[dev]: loss={float(val_loss):.3f}, {repr(dev_metric)}')
+            print(f'[test]: loss={float(test_loss):.3f}, {repr(test_metric)}')
             if sum(losses.values()) < train_loss:
                 train_improv = train_patience
                 train_loss = sum(losses.values())
             else:
                 train_improv -= 1
                 
-            if train_improv == 0:
-                print('No improvement in the train set')
-                break 
-            if dev_improv == 0:
-                print('No improvement in the dev set')
+            if train_improv <= 0 and dev_improv <= 0:
+                print('No improvement')
                 break 
                 
         # save dev inputs 
         self = self.__class__.load(path, self.device)
+        self.predict(train, f'{path}/train/', batch_size)
+        self.predict(dev, f'{path}/dev', batch_size)
+        _, best_metric = self.evaluate(test, batch_size)
         best_metric.save(f'{path}/result.pickle')
         return best_metric
 
     
     @torch.no_grad()
-    def evaluate(self, data: FacadesDataset, batch_size: int) -> Metric:
+    def evaluate(self, data: FacadesDataset, batch_size: int) -> Tuple[torch.Tensor, Metric]:
         """Evaluates the input dataset.
 
         Args:
@@ -112,9 +114,11 @@ class FacadesModel:
         data.transform = self.TRANSFORM
         data_dl = DataLoader(data, batch_size, shuffle=False)
         metric = self.METRIC()
-        for inputs, targets in tqdm(data_dl, total=len(data_dl), desc='eval'):
-            metric += self.eval_step(inputs.to(self.device), targets.to(self.device))
-        return metric 
+        loss = 0.0
+        for reals, masks in tqdm(data_dl, total=len(data_dl), desc='eval'):
+            metric += self.eval_step(reals.to(self.device), masks.to(self.device))
+            loss += sum(self.forward(reals.to(self.device), masks.to(self.device)).values())
+        return loss/len(data_dl), metric
     
     @torch.no_grad()
     def predict(self, data: FacadesDataset, path: str, batch_size: int):
@@ -125,6 +129,8 @@ class FacadesModel:
             path (str): Folder to store output images.
             batch_size (int): Batch size for model inference.
         """
+        if not os.path.exists(path):
+            os.makedirs(path)
         data.transform = self.TRANSFORM
         data_dl = DataLoader(data, batch_size, shuffle=False)
         preds = []

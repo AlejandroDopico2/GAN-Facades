@@ -39,7 +39,8 @@ class FacadesDataset(Dataset):
         
         return real_image, input_image
     
-    def split(self, *sizes: List[Union[int, float]], shuffle: bool = True) -> Tuple[FacadesDataset]:
+    def split(self, *sizes: List[Union[int, float]], shuffle: bool = True, seed: int = 42) -> Tuple[FacadesDataset]:
+        random.seed(seed)
         if shuffle:
             random.shuffle(self.image_paths)
         lens = [int(len(self)*ratio) for ratio in sizes] if isinstance(sizes[0], float) else sizes

@@ -33,6 +33,7 @@ class AdversarialTranslator(FacadesModel):
         self.gen_loss = GeneratorLoss()
         self.dis_loss = DiscriminatorLoss()
         self.seg_loss = nn.BCEWithLogitsLoss()
+        self.optimize = 0
         
     def train(self, *args, opt: Callable = Adam, lr: float = 2e-4, **kwargs):
         """Override the general train function to specify the generator and discriminator optimizers.
@@ -66,15 +67,19 @@ class AdversarialTranslator(FacadesModel):
     
     def backward(self, gen_loss: torch.Tensor, dis_loss: torch.Tensor, seg_loss: torch.Tensor):
         # generator params update
-        self.gen_optimizer.zero_grad()
-        gen_loss.backward()
-        self.gen_optimizer.step()
-        
-        # discriminator params update 
-        self.dis_optimizer.zero_grad()
-        dis_loss.backward()
-        self.dis_optimizer.step()
-        
+        # gen_loss += seg_loss/4
+        if self.optimize == 0:
+            self.gen_optimizer.zero_grad()
+            gen_loss.backward()
+            self.gen_optimizer.step()
+            self.optimize = 1 
+        else:
+            # discriminator params update 
+            self.dis_optimizer.zero_grad()
+            dis_loss.backward()
+            self.dis_optimizer.step()
+            self.optimize = 0
+            
     @torch.no_grad()
     def eval_step(self, reals: torch.Tensor, masks: torch.Tensor) -> GenerationMetric:
         labels = self.segmenter.label(masks)
@@ -87,7 +92,7 @@ class AdversarialTranslator(FacadesModel):
     def pred_step(self, reals: torch.Tensor, masks: torch.Tensor) -> torch.Tensor:
         fakes = self.generator(masks)
         fakes_segmented = self.segmenter.segment(self.segmenter.model(fakes))
-        return torch.cat([reals, masks, fakes, fakes_segmented], -1)*0.5+0.5
+        return torch.cat([reals, self.segmenter.segment(masks), fakes, fakes_segmented], -1)*0.5+0.5
 
     def save(self, path: str):
         torch.save(self.generator, f'{path}/generator.pt')

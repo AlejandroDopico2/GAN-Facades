@@ -140,7 +140,6 @@ class AttentionBlock(nn.Module):
         self.batch_norm = batch_norm
         self.act = act 
         self.drop = nn.Dropout2d(dropout, inplace=True)
-        self.reset_parameters()
 
     def forward(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
         """2-dimensional attention

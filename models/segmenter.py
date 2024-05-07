@@ -8,8 +8,6 @@ import numpy as np
 from utils import FacadesDataset, SegmentationMetric
 from modules import VGGNet, FCN8s
 from kmeans_pytorch import kmeans, kmeans_predict
-from torchvision.transforms import Compose, ToTensor, Normalize, RandomHorizontalFlip, RandomAffine
-from PIL import Image
 from torch.nn.functional import sigmoid
 
 class SemanticSegmenter(FacadesModel):
@@ -22,7 +20,7 @@ class SemanticSegmenter(FacadesModel):
         self.model = model 
         self.loss = nn.BCEWithLogitsLoss()
         
-    def train(self, train: FacadesDataset, *args, opt: Callable = Adam, lr: float = 1e-4, **kwargs):
+    def train(self, train: FacadesDataset, *args, opt: Callable = Adam, lr: float = 1e-3, **kwargs):
         # train kmeans 
         train.transform = self.TRANSFORM
         points = torch.cat([train[i][1].flatten(1,2) for i in range(self.N_KMEANS)], 1).permute(1,0)
@@ -33,7 +31,7 @@ class SemanticSegmenter(FacadesModel):
     def forward(self, reals: torch.Tensor, masks: torch.Tensor) -> Dict[str, torch.Tensor]:
         segmented = self.segment(masks)
         outputs = self.model(reals)
-        loss = self.loss(outputs.flatten(), segmented.flatten())
+        loss = self.loss(outputs.flatten(), sigmoid(segmented.flatten()))
         return {'loss': loss}
     
     def backward(self, loss: torch.Tensor):
@@ -51,7 +49,7 @@ class SemanticSegmenter(FacadesModel):
     def pred_step(self, reals: torch.Tensor, masks: torch.Tensor) -> torch.Tensor:
         segmented = self.segment(masks)
         preds = self.segment(self.model(reals))
-        return torch.cat([reals, segmented, preds], -1)*0.5+0.5
+        return torch.cat([reals, masks, segmented, preds], -1)*0.5+0.5
 
     def segment(self, x: torch.Tensor) -> torch.Tensor:
         with contextlib.redirect_stdout(None):

@@ -100,8 +100,8 @@ class SegmentationMetric(Metric):
 class GenerationMetric(SegmentationMetric):
     METRICS = ['rPACC', 'rMACC', 'rMIU', 'rFWIU', 'fPACC', 'fMACC', 'fMIU', 'fFWIU', 'iMAE']
     ATTRIBUTES = ['real_pacc', 'real_macc', 'real_miu', 'real_fwiu', 'fake_pacc', 'fake_macc', 'fake_miu', 'fake_fwiu', 'imae']
-    SCALE =  ['rPACC', 'rMACC', 'rMIU', 'rFWIU', 'fPACC', 'fMACC', 'fMIU', 'fFWIU']
-    KEY = ['iMAE']
+    SCALE =  ['rPACC', 'rMACC', 'rMIU', 'rFWIU', 'fPACC', 'fMACC', 'fMIU', 'fFWIU', 'iMAE']
+    KEY = ['rPACC', 'rMACC', 'rMIU', 'rFWIU', 'fPACC', 'fMACC', 'fMIU', 'fFWIU', 'iMAE']
     MODE = 'max'
     eps = 1e-12
     

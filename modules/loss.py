@@ -3,11 +3,11 @@ import torch.nn as nn
 from utils.fn import gaussian2d
 from torchvision.transforms.functional import rgb_to_grayscale
 from torch.nn.functional import max_pool2d
-
+from typing import Optional
 
 
 class GeneratorLoss(nn.Module):
-    def __init__(self, alpha=100, weights: bool = False, k1: int = 17, k2: int = 11):
+    def __init__(self, alpha=100, weights: bool = True, k1: int = 17, k2: int = 11):
         super().__init__()
         self.alpha = alpha
         self.l1 = nn.L1Loss()
@@ -25,6 +25,7 @@ class GeneratorLoss(nn.Module):
             fake_preds: torch.Tensor
         ):
         dis_loss = self.loss(fake_preds, torch.ones_like(fake_preds))
+        l1_loss = self.l1(fakes, reals)
         if self.weights:
             gray_reals = rgb_to_grayscale(reals*0.5+0.5)
             W = max_pool2d(gray_reals, kernel_size=self.k1, stride=1, padding=self.k1//2) \
@@ -34,15 +35,13 @@ class GeneratorLoss(nn.Module):
             W = (W-W.min())/(W.max()-W.min())
             mae = W*((fakes-reals).abs())
             l1_loss = mae.mean()
-        else:
-            l1_loss = self.l1(fakes, reals)
-        return dis_loss + (self.alpha * l1_loss)
+        return dis_loss + (self.alpha*l1_loss)
 
 
 class DiscriminatorLoss(nn.Module):
     def __init__(self):
         super().__init__()
-        self.loss = nn.CrossEntropyLoss()
+        self.loss = nn.BCEWithLogitsLoss()
 
     def forward(self, fake_pred, real_pred):
         fake_target = self.loss(fake_pred, torch.zeros_like(fake_pred))

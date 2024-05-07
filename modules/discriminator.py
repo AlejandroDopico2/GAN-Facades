@@ -4,7 +4,7 @@ from modules.common import ConvBlock, DeformableConvBlock
 
 
 class ConditionalDiscriminator(nn.Module):
-    N_FILTERS = [32, 64]
+    N_FILTERS = [64, 128, 256, 512]
     KERNEL_SIZE = 4
     STRIDE = 2
     
@@ -23,12 +23,12 @@ class ConditionalDiscriminator(nn.Module):
             self.encoder.append(block)
             last = n
         self.conv = nn.Conv2d(last, 1, kernel_size=4, stride=self.STRIDE, padding=1)
-        self.sigmoid = nn.Sigmoid()
+        self.act = nn.Tanh()
 
     def forward(self, masks: torch.Tensor, imgs: torch.Tensor) -> torch.Tensor:
         x = torch.cat([masks, imgs], dim=1)
         for block in self.encoder:
             x = block(x)
         x = self.conv(x)
-        return self.sigmoid(x)
+        return self.act(x)
 
