@@ -68,17 +68,14 @@ class AdversarialTranslator(FacadesModel):
     def backward(self, gen_loss: torch.Tensor, dis_loss: torch.Tensor, seg_loss: torch.Tensor):
         # generator params update
         # gen_loss += seg_loss/4
-        if self.optimize == 0:
-            self.gen_optimizer.zero_grad()
-            gen_loss.backward()
-            self.gen_optimizer.step()
-            self.optimize = 1 
-        else:
-            # discriminator params update 
-            self.dis_optimizer.zero_grad()
-            dis_loss.backward()
-            self.dis_optimizer.step()
-            self.optimize = 0
+        self.gen_optimizer.zero_grad()
+        gen_loss.backward()
+        self.gen_optimizer.step()
+        self.optimize = 1 
+        # discriminator params update 
+        self.dis_optimizer.zero_grad()
+        dis_loss.backward()
+        self.dis_optimizer.step()
             
     @torch.no_grad()
     def eval_step(self, reals: torch.Tensor, masks: torch.Tensor) -> GenerationMetric:

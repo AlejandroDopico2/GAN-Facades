@@ -11,10 +11,10 @@ if __name__ == '__main__':
     parser.add_argument('--segmenter', '-s', type=str, default='results/segmenter', help='Segmenter path')
     parser.add_argument('-d', '--device', type=str, default='cuda:0', help='CUDA device')
     parser.add_argument('--weights', action='store_true', help='Whether to use weighted loss')
-    parser.add_argument('--epochs', type=int, default=400, help='Number of training epochs')
+    parser.add_argument('--epochs', type=int, default=500, help='Number of training epochs')
 
     args = parser.parse_args()
-    data = FacadesDataset.from_folder(args.path)    
+    data = FacadesDataset.from_folder(args.data)    
     train, dev, test = data.split(0.1, 0.1)
     
     segmenter = SemanticSegmenter.load(args.segmenter, device=args.device)
