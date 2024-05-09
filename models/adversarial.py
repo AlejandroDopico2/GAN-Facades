@@ -10,7 +10,8 @@ from torch.nn.functional import cross_entropy
 from model import FacadesModel
 from torchvision.transforms import Compose, ToTensor, Normalize, RandomHorizontalFlip, RandomAffine
 import segmentation_models_pytorch as smp
-from torch.nn.functional import sigmoid 
+from torch.nn.functional import tanh 
+
 
 
 
@@ -134,12 +135,13 @@ class AdversarialTranslator(FacadesModel):
         elif gen_type == 'link':
             generator = smp.Linknet(pretrained, in_channels=3, classes=3)
         elif gen_type == 'fpn':
-            generator = smp.FPN(pretrained, in_channels=3, classes=3)
+            generator = smp.FPN(pretrained, in_channels=3, classes=3, decoder_pyramid_channels=512, decoder_segmentation_channels=512, activation=nn.Tanh, decoder_dropout=0.5)
         elif gen_type == 'psp':
-            generator = smp.PSPNet(pretrained, in_channels=3, classes=3)
+            generator = smp.PSPNet(pretrained, in_channels=3, classes=3, encoder_depth=5, activation=nn.Tanh, upsampling=32, psp_dropout=0)
         else:
             raise NotImplementedError(f'The generator type {gen_type} is not avaiable')
         discriminator = ConditionalDiscriminator(3, conv='base')
+        print(generator)
         return AdversarialTranslator(generator.to(device), discriminator.to(device), segmenter, device, weights=weights)
         
                 
