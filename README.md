@@ -37,7 +37,7 @@ The results and image predictions will be stored at [results/base/]().
 
 
 
-## Team:construction_worker:
+## Team :construction_worker:
 - [Alejandro Dopico](https://github.com/AlejandroDopico2) ([alejandro.dopico2@udc.es](mailto:alejandro.dopico2@udc.es)).
 - [Ana Ezquerro](https://anaezquerro.github.io) ([ana.ezquerro@udc.es](mailto:ana.ezquerro@udc.es)).
 
