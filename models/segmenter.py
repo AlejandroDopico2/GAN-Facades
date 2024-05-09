@@ -75,8 +75,8 @@ class SemanticSegmenter(FacadesModel):
     
     @classmethod
     def load(cls, path: str, device: str) -> SemanticSegmenter:
-        model = torch.load(f'{path}/model.pt').to(device)
-        centers = torch.load(f'{path}/centers.pt').to(device)
+        model = torch.load(f'{path}/model.pt', map_location=device).to(device)
+        centers = torch.load(f'{path}/centers.pt', map_location=device).to(device)
         return SemanticSegmenter(model, centers, device)
     
     @classmethod
