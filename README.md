@@ -1,7 +1,7 @@
 # Image Translation models for Facades Generation :european_post_office: 
 
 
-Hi!:wave: This is PyTorch implementation of CV approaches for image-to-image translation in the [Facades dataset](https://www.kaggle.com/datasets/balraj98/facades-dataset). Supported models are based on *pix2pix* framework ([Isola et al., 2017](https://arxiv.org/abs/1611.07004)):
+Hi! :wave: This is PyTorch implementation of CV approaches for image-to-image translation in the [Facades dataset](https://www.kaggle.com/datasets/balraj98/facades-dataset). Supported models are based on *pix2pix* framework ([Isola et al., 2017](https://arxiv.org/abs/1611.07004)):
 
 - Deformable convolutions ([Zhu et al., 2018](https://arxiv.org/abs/1811.11168)) as the U-Net ([Ronneberger et al., 2015](https://arxiv.org/abs/1505.04597)) backbone.
 - Attention-based skip connection in the U-Net generator ([Oktay et al., 2018](https://arxiv.org/abs/1804.03999)).
