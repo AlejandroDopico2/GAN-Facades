@@ -1,12 +1,13 @@
 from __future__ import annotations
-from typing import Tuple, Dict
+from typing import Tuple, List, Dict, Optional
 from torch.utils.data import DataLoader
 from tqdm import tqdm 
 import torch, os
 from utils import FacadesDataset, Metric
 import numpy as np 
+from PIL import Image
 from torchvision.utils import save_image
-from torchvision.transforms import ToTensor, Compose, RandomHorizontalFlip, Normalize
+from torchvision.transforms import ToTensor, Compose, RandomHorizontalFlip, RandomAffine, Normalize, Lambda
 
 class FacadesModel:
     """Abstract representation of a Facades Model that implements the general train, predict and 
@@ -18,6 +19,7 @@ class FacadesModel:
     def __init__(self, device: str = 'cuda:0'):
         self.device = device 
         self.TRANSFORM = Compose([ToTensor(), Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
+        # self.TRANSFORM = Compose([ToTensor(), Lambda(lambda x: (x-x.min()/(x.max()-x.min())))])
         
     def train(
             self,
@@ -33,19 +35,16 @@ class FacadesModel:
         ) -> Metric:
         """Model training with:
         - Early stopping over the train and dev set.
-        - Prediction of the test set on each improved epoch.
-        - Prediction of the train and dev set at the end of training.
+        - Prediction of the validation set.
 
         Args:
             train (FacadesDataset): Train set.
             dev (FacadesDataset): Validation set.
-            test (FacadesDataset): Test set.
             path (str): Folder to store PyTorch modules.
             epochs (int, optional): Training epochs. Defaults to 100.
             batch_size (int, optional): Batch size. Defaults to 20.
             train_patience (int, optional): Number of allowed epochs with no train improvement. Defaults to 20.
             dev_patience (int, optional): Number of allowed epochs with no validation improvement. Defaults to 10.
-            aug (bool): Whether to use data augmentation. Defaults to True.
         """
         if not os.path.exists(path):
             os.makedirs(path)
@@ -92,6 +91,7 @@ class FacadesModel:
                 print('No improvement')
                 break 
                 
+        # save dev inputs 
         self = self.__class__.load(path, self.device)
         self.predict(train, f'{path}/train/', batch_size)
         self.predict(dev, f'{path}/dev', batch_size)
@@ -109,7 +109,6 @@ class FacadesModel:
             batch_size (int): Batch size for model inference.
 
         Returns:
-            torch.Tensor: Global model loss.
             Metric: Evaluation metric.
         """
         data.transform = self.TRANSFORM
@@ -142,7 +141,6 @@ class FacadesModel:
             filename = img_path.split('/')[-1]
             save_image(pred, f'{path}/{filename}')
             
-            
     """Specific methods that must be implemented in inherited models."""
             
     def forward(self, imgs: torch.Tensor, masks: torch.Tensor) -> Dict[str, torch.Tensor]:
@@ -156,7 +154,7 @@ class FacadesModel:
         raise NotImplementedError
     
     @torch.no_grad()
-    def pred_step(self, reals: torch.Tensor, masks: torch.Tensor) -> torch.Tensor: 
+    def pred_step(self, reals: torch.Tensor, masks: torch.Tensor): 
         raise NotImplementedError
 
     def save(self, path: str):

@@ -1,13 +1,18 @@
 from __future__ import annotations
-from typing import Union, Callable, Dict
+from typing import Union, Callable, Dict, Tuple
 from torch import nn 
 from torch.optim import Adam
 import torch 
 from modules import GeneratorLoss, DiscriminatorLoss, UNet, AttentionUNet, ConditionalDiscriminator
 from models.segmenter import SemanticSegmenter
 from utils import GenerationMetric
+from torch.nn.functional import cross_entropy
 from model import FacadesModel
+from torchvision.transforms import Compose, ToTensor, Normalize, RandomHorizontalFlip, RandomAffine
 import segmentation_models_pytorch as smp
+from torch.nn.functional import tanh 
+
+
 
 
 class AdversarialTranslator(FacadesModel):
@@ -23,15 +28,6 @@ class AdversarialTranslator(FacadesModel):
             device: str,
             weights: bool = False
         ):
-        """Initialize the adversarial network.
-
-        Args:
-            generator (nn.Module): Generator module.
-            discriminator (nn.Module): Discriminator module.
-            segmenter (SemanticSegmenter): _description_
-            device (str): _description_
-            weights (bool, optional): _description_. Defaults to False.
-        """
         super().__init__(device)
         self.generator = generator 
         self.discriminator = discriminator 
@@ -41,7 +37,7 @@ class AdversarialTranslator(FacadesModel):
         self.seg_loss = nn.BCEWithLogitsLoss()
         
     def train(self, *args, opt: Callable = Adam, lr: float = 2e-4, **kwargs):
-        """Overrides the general train function to specify the generator and discriminator optimizers.
+        """Override the general train function to specify the generator and discriminator optimizers.
 
         Args:
             opt (Callable, optional): General optimizer. Defaults to Adam.
@@ -53,15 +49,6 @@ class AdversarialTranslator(FacadesModel):
         
                 
     def forward(self, reals: torch.Tensor, masks: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Forward pass.
-
-        Args:
-            reals (torch.Tensor): Real images.
-            masks (torch.Tensor): Map images.
-
-        Returns:
-            Dict[str, torch.Tensor]: Dictionary of model losses.
-        """
         # generator loss 
         fakes = self.generator(masks)
         fake_preds = self.discriminator(masks, fakes)
@@ -80,14 +67,8 @@ class AdversarialTranslator(FacadesModel):
         return {'gen_loss': gen_loss, 'dis_loss': dis_loss, 'seg_loss': seg_loss}
     
     def backward(self, gen_loss: torch.Tensor, dis_loss: torch.Tensor, seg_loss: torch.Tensor):
-        """Backward pass.
-
-        Args:
-            gen_loss (torch.Tensor): Generator loss.
-            dis_loss (torch.Tensor): Discriminator loss.
-            seg_loss (torch.Tensor): Segmenter loss.
-        """
         # generator params update
+        # gen_loss += seg_loss/4
         self.gen_optimizer.zero_grad()
         gen_loss.backward()
         self.gen_optimizer.step()
@@ -99,35 +80,14 @@ class AdversarialTranslator(FacadesModel):
             
     @torch.no_grad()
     def eval_step(self, reals: torch.Tensor, masks: torch.Tensor) -> GenerationMetric:
-        """Evaluation step. 
-
-        Args:
-            reals (torch.Tensor): Real images.
-            masks (torch.Tensor): Map images.
-
-        Returns:
-            GenerationMetric: Evaluation metric.
-        """
-        # get gold segmented labels
         labels = self.segmenter.label(masks)
-        # iamge geneartions
         fakes = self.generator(masks)
-        # pass the real and fake images to the segmenter and take the predicted labels
         reals_segmented = self.segmenter.label(self.segmenter.model(reals))
         fakes_segmented = self.segmenter.label(self.segmenter.model(fakes))
         return GenerationMetric(fakes.flatten(), fakes_segmented.flatten(), reals.flatten(), reals_segmented.flatten(), labels.flatten())
     
     @torch.no_grad()
     def pred_step(self, reals: torch.Tensor, masks: torch.Tensor) -> torch.Tensor:
-        """Prediction step. 
-
-        Args:
-            reals (torch.Tensor): Real images.
-            masks (torch.Tensor): Map images.
-
-        Returns:
-            torch.Tensor: Concatenation of real, map, fake and fake segmented images.
-        """
         fakes = self.generator(masks)
         fakes_segmented = self.segmenter.segment(self.segmenter.model(fakes))
         return torch.cat([reals, self.segmenter.segment(masks), fakes, fakes_segmented], -1)*0.5+0.5
@@ -152,15 +112,17 @@ class AdversarialTranslator(FacadesModel):
             pretrained: str = 'resnext50_32x4d',
             device: str = 'cuda:0',
             weights: bool = False
-        ) -> AdversarialTranslator:
+        ):
         """Build an adversarial image-to-image translator.
 
         Args:
             segmenter (Union[str, SemanticSegmenter]): Semantic segmentation model for evaluation.
-            gen_type (str): Type of generator. Default to baseline.
-            pretrained (str): Pretrained weights.
-            device (str): CUDA device. Defaults to 'cuda:0'.
-            weights (bool): Whether to use weighted loss.
+            num_blocks (int, optional): Number of blocks of the PathGAN discriminator. Defaults to 4.
+            generator (str): Type of UNet generator (base, deformable or attention-based).
+            device (_type_, optional): _description_. Defaults to 'cuda:0'.
+
+        Returns:
+            _type_: _description_
         """
         if isinstance(segmenter, str):
             segmenter = SemanticSegmenter.load(segmenter, device)
