@@ -7,7 +7,7 @@ from typing import Optional
 
 
 class GeneratorLoss(nn.Module):
-    def __init__(self, alpha=100, weights: bool = False, k1: int = 3, k2: int = 5):
+    def __init__(self, alpha=1, weights: bool = False, k1: int = 3, k2: int = 5):
         super().__init__()
         self.alpha = alpha
         self.l1 = nn.L1Loss()

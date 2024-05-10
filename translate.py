@@ -5,8 +5,8 @@ from argparse import ArgumentParser
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Image translation system')
-    parser.add_argument('gen_type', type=str, help='Generator type')
-    parser.add_argument('--path', '-p', type=str, help='Path where to store the image translator')
+    parser.add_argument('gen_type', type=str, help='Generator type', choices=['base', 'deform', 'atnn', 'link', 'psp', 'fpn'], required=True)
+    parser.add_argument('--path', '-p', type=str, help='Path where to store the image translator', rquired=True)
     parser.add_argument('--data', type=str, default='facades', help='Facades dataset folder')
     parser.add_argument('--segmenter', '-s', type=str, default='results/segmenter', help='Segmenter path')
     parser.add_argument('-d', '--device', type=str, default='cuda:0', help='CUDA device')
