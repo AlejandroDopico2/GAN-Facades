@@ -4,3 +4,7 @@ __pycache__
 
 images
 *.pt
+results/*
+StyleSwin/*
+prueba*
+results*

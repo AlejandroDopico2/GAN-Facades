@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 import torchvision.models as models
 
@@ -13,10 +12,51 @@ ranges = {
 
 # cropped version from https://github.com/pytorch/vision/blob/master/torchvision/models/vgg.py
 cfg = {
-    'vgg11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
-    'vgg13': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
-    'vgg16': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
-    'vgg19': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
+    "vgg11": [64, "M", 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
+    "vgg13": [64, 64, "M", 128, 128, "M", 256, 256, "M", 512, 512, "M", 512, 512, "M"],
+    "vgg16": [
+        64,
+        64,
+        "M",
+        128,
+        128,
+        "M",
+        256,
+        256,
+        256,
+        "M",
+        512,
+        512,
+        512,
+        "M",
+        512,
+        512,
+        512,
+        "M",
+    ],
+    "vgg19": [
+        64,
+        64,
+        "M",
+        128,
+        128,
+        "M",
+        256,
+        256,
+        256,
+        256,
+        "M",
+        512,
+        512,
+        512,
+        512,
+        "M",
+        512,
+        512,
+        512,
+        512,
+        "M",
+    ],
 }
 
 
@@ -83,7 +123,7 @@ class FCN8s(nn.Module):
         # Load pre-trained model
         self.backbone = pretrained_net
 
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.LeakyReLU(0.5, inplace=True)
         self.conv1 = nn.ConvTranspose2d(
             512, 512, kernel_size=3, stride=2, padding=1, dilation=1, output_padding=1
         )
@@ -104,8 +144,8 @@ class FCN8s(nn.Module):
             64, 32, kernel_size=3, stride=2, padding=1, dilation=1, output_padding=1
         )
         self.bn5 = nn.BatchNorm2d(32)
-
         self.classifier = nn.Conv2d(32, num_classes, kernel_size=1)
+        self.act = nn.Tanh()
 
     def forward(self, x):
         # Backbone
@@ -115,34 +155,13 @@ class FCN8s(nn.Module):
         x4 = x["x4"]  # size=(N, 512, x.H/16, x.W/16)
         x3 = x["x3"]  # size=(N, 256, x.H/8,  x.W/8)
 
-        print(x5.shape, x4.shape, x3.shape)
-
         x = self.relu(self.conv1(x5))
-        print(x.shape)
         x = self.bn1(x + x4)
-        print(x.shape)
         x = self.relu(self.conv2(x))
-        print(x.shape)
         x = self.bn2(x + x3)
-        print(x.shape)
         x = self.bn3(self.relu(self.conv3(x)))
-        print(x.shape)
         x = self.bn4(self.relu(self.conv4(x)))
-        print(x.shape)
         x = self.bn5(self.relu(self.conv5(x)))
-        print(x.shape)
         x = self.classifier(x)
-        print(x.shape)
 
-        return x
-
-
-num_classes = 21
-
-vgg_model = VGGNet(requires_grad=True)
-net = FCN8s(num_classes, vgg_model)
-
-input_tensor = torch.randn(1, 3, 256, 256)
-output_tensor = net(input_tensor)
-
-print("Output shape:", output_tensor.shape)
+        return self.act(x)
