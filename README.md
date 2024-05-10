@@ -1,4 +1,5 @@
 # Image Translation models for Facades Generation :european_post_office: 
+![Image outptus for each Model](assets/outputs.jpg)
 
 
 Hi! :wave: This is PyTorch implementation of CV approaches for image-to-image translation in the [Facades dataset](https://www.kaggle.com/datasets/balraj98/facades-dataset). Supported models are based on *pix2pix* framework ([Isola et al., 2017](https://arxiv.org/abs/1611.07004)):
